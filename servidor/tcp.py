@@ -70,9 +70,6 @@ class Conexao:
         self.DevRTT = None
         self.a = 0.125
         self.b = 0.25
-        self.cwnd = 1
-        self.cwnd_ack = self.ack_no
-        self.n_enviados = b''
         self.timer = asyncio.get_event_loop().call_later(self.TimeoutInterval, self._exemplo_timer)
         # um timer pode ser criado assim; esta linha é só um exemplo e pode ser removida
         #self.timer.cancel()   # é possível cancelar o timer chamando esse método; esta linha é só um exemplo e pode ser removida
@@ -89,31 +86,9 @@ class Conexao:
             self.TimeoutInterval = self.EstimatedRTT + 4*self.DevRTT
             
 
-    def mudar_de_fila(self):
-        livre = (self.cwnd - len(self.fila_envio))*MSS
-        if livre <= 0:
-            return
-        dados = self.n_enviados[:int(livre)]
-        self.n_enviados = self.n_enviados[int(livre):]
-        for i in range( int(len(dados)/MSS) ):
-            ini = i*MSS
-            fim = min(len(dados), (i+1)*MSS)
-
-            payload = dados[ini:fim]
-
-            segmento = make_header(self.id_conexao[3],self.id_conexao[1],self.seq_no,self.ack_no, (FLAGS_ACK))+payload
-            fixed = fix_checksum(segmento,self.id_conexao[2],self.id_conexao[0])
-            self.servidor.rede.enviar(fixed, self.id_conexao[0])
-            self.timer.cancel()
-            self.timer = asyncio.get_event_loop().call_later(self.TimeoutInterval, self._exemplo_timer)
-            self.fila_envio.append([fixed,len(payload), time()])
-            self.seq_no += len(payload)
-
-
+    
     def _exemplo_timer(self):
         if self.fila_envio:
-            self.cwnd = max(self.cwnd/2,1)
-            print('oia o loop mae')
             self.servidor.rede.enviar(self.fila_envio[0][0],self.id_conexao[0])
             self.fila_envio[0][2] = None
         
@@ -131,12 +106,6 @@ class Conexao:
 
         if( flags &FLAGS_ACK) == FLAGS_ACK and self.send_base < ack_no:
             self.send_base = ack_no
-            if ack_no > (self.cwnd_ack + MSS*self.cwnd):
-                print('aumentando cwnd')
-                self.cwnd_ack = ack_no
-                self.cwnd += 1
-                print(self.cwnd)
-                self.mudar_de_fila()
             if self.fila_envio:
                 self.timer.cancel()
                 removido = self.fila_envio.pop(0)
@@ -164,21 +133,11 @@ class Conexao:
         """
         Usado pela camada de aplicação para enviar dados
         """
-        if (self.cwnd*MSS) - (len(self.fila_envio)*MSS) <= 0:
-            self.n_enviados = self.n_enviados + dados
-            return
-        else:
-            livre = (self.cwnd*MSS) - (len(self.fila_envio)*MSS)
-            self.n_enviados = self.n_enviados + dados[int(livre):]
-            dados = dados[:int(livre)]
-
         if len(dados) <= MSS:
             segmento = make_header(self.id_conexao[3],self.id_conexao[1],self.seq_no,self.ack_no, (FLAGS_ACK))+dados
             fixed = fix_checksum(segmento,self.id_conexao[2],self.id_conexao[0])
             self.servidor.rede.enviar(fixed,self.id_conexao[0])
-            print('enviei original')
             self.seq_no += len(dados)
-            print('criei timer')
             self.timer.cancel()
             self.timer = asyncio.get_event_loop().call_later(self.TimeoutInterval, self._exemplo_timer)
             self.fila_envio.append([fixed,len(dados), time()])
@@ -211,6 +170,7 @@ class Conexao:
         Usado pela camada de aplicação para fechar a conexão
         """
         # TODO: implemente aqui o fechamento de conexão
+        print('fechando Conexao')
         segmento = make_header(self.id_conexao[3],self.id_conexao[1],self.seq_no,self.ack_no, (FLAGS_FIN|FLAGS_ACK))
         self.servidor.rede.enviar(fix_checksum(segmento,self.id_conexao[2],self.id_conexao[0]),self.id_conexao[0])
         self.servidor.conexoes.pop(self.id_conexao)

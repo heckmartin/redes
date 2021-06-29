@@ -24,9 +24,9 @@ def conexao_aceita(conexao):
 
 enlace = CamadaEnlaceLinux()
 rede = IP(enlace)
-rede.definir_endereco_host('192.168.1.255')  # consulte o endereço IP da sua máquina com o comando: ip addr
+rede.definir_endereco_host('192.168.1.186')  # consulte o endereço IP da sua máquina com o comando: ip addr
 rede.definir_tabela_encaminhamento([
-    ('0.0.0.0/0', '192.168.1.1')  # consulte sua rota padrão com o comando: ip route | grep default
+    ('0.0.0.0/0', '192.168.0.1')  # consulte sua rota padrão com o comando: ip route | grep default
 ])
 servidor = Servidor(rede, 7000)
 servidor.registrar_monitor_de_conexoes_aceitas(conexao_aceita)
